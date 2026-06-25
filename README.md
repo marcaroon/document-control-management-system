@@ -1,86 +1,37 @@
-# QMS Document Control — Phase 1 + 2 + 3 + 4
+# Document Control Management System
 
-Phase 1 (§9): Firebase project + custom claims, Auth, RBAC middleware/
-proxy, Org profile CRUD, Department CRUD, Document CRUD (no workflow),
-dashboard skeleton.
+A comprehensive ISO 9001 document control and compliance management system supporting multi-tenant organizations, role-based workflows, and complete audit trails. Built with Next.js, Firebase/Firestore, and Cloudinary for document storage.
 
-Phase 2 (§9): `document_versions` upload + Storage integration, the full
-§5 approval state machine, `document_approvals` rows, in-app
-notifications (§7), and ISO clause pages + clause↔document mapping.
+## Key Features
 
-Phase 3 (§9): Audit Trail UI, Vision & Mission module (simplified
-propose→approve), Settings/Numbering (format validation), and the
-Access Control UI Phase 1 left as a dead link.
+- **ISO Compliance**: Pre-configured ISO 9001:2015 clauses with document mapping
+- **Document Control**: Full versioning, approvals, and audit trails
+- **Role-Based Access**: Super Admin, Document Controller, Management Representative, Department User, Read-Only
+- **Multi-Tenant**: Complete data isolation per organization with Firestore security rules
+- **File Storage**: Cloudinary integration for document uploads/downloads
+- **Real-time Sync**: Custom user claims via Cloud Functions for instant permission updates
+- **Numbering Templates**: Configurable document numbering per type and department
 
-Phase 4 (§9): Dashboard charts (Recharts — status distribution,
-department breakdown, all computed from live RBAC-scoped data), global
-search (client-side instant, per explicit decision — see "Known gaps"),
-Excel export of the document list (PDF export deferred per explicit
-priority decision — same data-shaping pattern, not yet built), and
-favorites/recently-viewed documents (auto-tracked on page view, per
-explicit decision, with throttling to control write costs).
+## System Architecture
 
-**Stack actually installed:** Next.js 16.2.9 (App Router, Turbopack),
-React 19.2.4, TypeScript, Tailwind v4, shadcn/ui (New York style),
-Firebase (Auth, Firestore, Storage), Firebase Admin SDK, Cloud Functions
-v2. This deviates from the original spec's "Next.js 15" by explicit
-decision — see the note at the top of `src/proxy.ts` for what changed
-(middleware.ts → proxy.ts is the only breaking rename that affected this
-codebase).
+- **Frontend**: Next.js 16+ with React 19, deployed with Server Actions
+- **Backend**: Firestore (real-time database), Cloud Functions (custom claims sync)
+- **Auth**: Firebase Authentication with Email/Password
+- **Storage**: Cloudinary (primary file storage)
+- **Testing**: Vitest with Firestore emulator for rules/isolation testing
 
-## What is and is NOT verified
+---
 
-**Verified in this environment** (ran the actual tool, not just read the
-code):
-- `npx tsc --noEmit` — clean, both the Next.js app and `functions/`
-- `npx eslint src` — clean
-- `npm run build` — full production build succeeds, all 18 routes
-  compile and prerender correctly (added in Phase 4: `/search`,
-  `/api/export/documents`)
-- **`npm run test:unit`** — 57 tests across four files, all passing:
-  - `tests/permissions.test.ts` (28) — §5 state machine + RBAC matrix.
-  - `tests/numbering-template.test.ts` (15) — numbering format validation.
-  - `tests/export-xlsx.test.ts` (7, new in Phase 4) — generates a real
-    .xlsx buffer and reads it back with ExcelJS to confirm sheet names,
-    header row, data rows, human-readable status/type labels, and
-    null-date handling are all correct. This is not "the function
-    didn't throw" — it's "the file that downloads is structurally
-    correct."
-  - `tests/dashboard-metrics.test.ts` (7, new in Phase 4) — status
-    counting, department grouping, the "Unassigned" fallback, and the
-    due-for-review date-boundary logic (including the inclusive-boundary
-    edge case: a document due exactly *now* counts as due).
+## Installation & Setup
 
-**NOT verified — you must run these yourself before trusting this in
-production:**
-- **`tests/firestore-rules.tenant-isolation.test.ts`** (`npm run
-  test:rules`) — same sandbox limitation as every previous phase.
-  Note: this test file does NOT cover the new `user_document_interactions`
-  collection's rules (favorites/recent) — those rules were reasoned
-  through carefully (see the long comment in `firestore.rules` about
-  the `list` rule's real limitation) but never exercised against a live
-  emulator. Add coverage for it before relying on those rules in
-  production.
-- The actual Excel download end-to-end (hitting `/api/export/documents`
-  in a real browser, confirming the file opens correctly in Excel) —
-  the unit tests verify the buffer's internal structure via ExcelJS,
-  which is strong evidence but not the same as a human opening the
-  downloaded file.
-- Global search's in-memory filtering against a REAL multi-hundred-
-  document index for performance — reasoned to be fine at expected
-  scale (see the comment in `app/actions/search.ts`), not load-tested.
-- The recordView() throttle's actual behavior under real concurrent
-  page loads (e.g. two browser tabs open to the same document) — the
-  throttle window is a simple time-based check, not synchronized across
-  concurrent requests, so two near-simultaneous requests could both pass
-  the throttle check before either one's write lands. Harmless for this
-  feature's purpose (a "recently viewed" list doesn't need exact
-  precision), but worth knowing if you ever reuse this pattern somewhere
-  that does need precision.
+### Prerequisites
 
-## Setup
+- Node.js 20+
+- Firebase CLI (`npm install -g firebase-tools`)
+- npm or yarn
+- Cloudinary account (free tier works for development)
 
-### 1. Create the Firebase project
+### 1. Create Firebase Project
 
 ```bash
 firebase login
@@ -88,257 +39,237 @@ firebase projects:create <your-project-id>
 # or use an existing project: firebase use <your-project-id>
 ```
 
-Enable in the Firebase Console: Authentication (Email/Password provider
-at minimum), Firestore (production mode), Storage.
+In the Firebase Console, enable:
 
-### 2. Get credentials
+- **Authentication**: Email/Password provider
+- **Firestore**: Production mode with rules (uploaded later)
+- **Storage**: For backup (primary is Cloudinary)
+- **Cloud Functions**: For custom claims sync
 
-**Client config** (Project Settings → General → Your apps → Web app):
-copy into `.env.local` as the `NEXT_PUBLIC_FIREBASE_*` values.
+### 2. Create Cloudinary Account
 
-**Admin SDK config** (Project Settings → Service Accounts → Generate new
-private key): downloads a JSON file. Map its fields into `.env.local`:
-- `project_id` → `FIREBASE_PROJECT_ID`
-- `client_email` → `FIREBASE_CLIENT_EMAIL`
-- `private_key` → `FIREBASE_PRIVATE_KEY` (keep the `\n` escapes literal,
-  wrap the whole value in quotes)
+Setup time: ~2 minutes (free tier)
+
+1. Sign up at [cloudinary.com](https://cloudinary.com)
+2. Go to **Dashboard** → note your **Cloud Name**, **API Key**, **API Secret**
+3. Keep API Secret private (server-side only)
+
+### 3. Get All Required Credentials
+
+**Firebase Client Config** (Project Settings → General → Your apps → Web app):
+Copy all `NEXT_PUBLIC_FIREBASE_*` values.
+
+**Firebase Admin SDK** (Project Settings → Service Accounts → Generate new private key):
+
+- Download JSON file and extract:
+  - `project_id` → `FIREBASE_PROJECT_ID`
+  - `client_email` → `FIREBASE_CLIENT_EMAIL`
+  - `private_key` → `FIREBASE_PRIVATE_KEY`
+
+**Note**: Keep the literal `\n` in the private key when copying.
+
+### 4. Configure Environment Variables
 
 ```bash
 cp .env.example .env.local
-# then fill in the values above
 ```
 
-**Never commit `.env.local`** — `.gitignore` already excludes it, but
-double-check before your first push.
+Edit `.env.local` with ALL values:
 
-### 3. Install dependencies
+```dotenv
+# ===== Firebase Client (PUBLIC, safe in browser) =====
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
+
+# ===== Firebase Admin (SERVER ONLY, never expose) =====
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY="...keep \n literal..."
+
+# ===== Cloudinary (PRIMARY file storage) =====
+# CLOUDINARY_API_SECRET must NEVER be exposed to browser
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=
+NEXT_PUBLIC_CLOUDINARY_API_KEY=
+
+# ===== Test Data Seeding (optional) =====
+SEED_PASSWORD=Password123!
+SEED_ORG_ID=my-org
+SEED_ORG_NAME=My Organization
+```
+
+**Critical**: `.env.local` is already in `.gitignore` — **never commit it**.
+
+### 5. Install Dependencies
 
 ```bash
+# Root project
 npm install
+
+# Cloud Functions (required for custom claims sync)
 cd functions && npm install && cd ..
 ```
 
-### 4. Run the mandatory tenant-isolation test
+### 6. Build & Deploy Cloud Functions
 
-This is §11 handoff note #4 — do this before writing any more app code,
-not after.
-
-```bash
-firebase emulators:exec --only firestore,auth \
-  --project <your-project-id> \
-  "npx vitest run tests/firestore-rules.tenant-isolation.test.ts"
-```
-
-If this fails, **do not proceed to Phase 2** until it passes — a failure
-here means `firestore.rules` has a tenant-isolation gap, which is risk #4
-in the register (§10), the highest-priority risk in the whole spec.
-
-### 4b. Run the permission/state-machine unit tests (no emulator needed)
-
-```bash
-npm run test:unit
-```
-
-These don't need Firebase at all — pure-function tests over
-`lib/rbac/permissions.ts`. Run them on every change to that file; they're
-fast (under a second) and they're what actually caught the approval
-segregation-of-duty decision and the illegal-transition rejections being
-correct, rather than just commented as correct.
-
-### 5. Set up custom claims for your first Super Admin
-
-New users get a `users/{uid}` Firestore doc but claims only sync via the
-`syncUserRoleClaim` Cloud Function once it's deployed, or instantly via
-`setUserRoleClaim` if created through the `inviteUser` server action.
-For your very first user (before any UI exists to invite anyone), do it
-manually:
+Cloud Functions handle custom user claims sync (permission updates sync instantly to all sessions):
 
 ```bash
 cd functions && npm run build
 firebase deploy --only functions
 ```
 
-Then create the first user + Firestore doc + claims via a one-off script
-or the Firebase Console + Admin SDK, since `inviteUser` requires an
-existing authenticated super_admin session to call it (chicken-and-egg
-for user #1, by design — there is no public "become admin" endpoint).
-
-### 6. Run the app
+### 7. Deploy Firestore Rules & Indexes
 
 ```bash
-# Against the Emulator Suite (recommended for development, per §11 note #1):
-firebase emulators:start
-# in another terminal:
-NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true npm run dev
+firebase deploy --only firestore:rules,firestore:indexes
+```
 
-# Against real Firebase (be careful — this writes real data):
+### 8. Run Mandatory Tests
+
+**Firestore tenant-isolation test** (security rules validation):
+
+```bash
+firebase emulators:exec --only firestore,auth \
+  "npx vitest run tests/firestore-rules.tenant-isolation.test.ts"
+```
+
+If this fails, **STOP** — tenant isolation is the highest security priority. Fix before proceeding.
+
+**RBAC & unit tests** (no emulator needed):
+
+```bash
+npm run test:unit
+```
+
+### 9. Seed Test Data (Optional)
+
+**Option A: Seed ISO clauses only** (recommended first run)
+
+1. Start emulator:
+   ```bash
+   firebase emulators:start
+   ```
+2. In another terminal, seed clauses via admin tools — or use the Organization page UI once app is running (appears when org has zero clauses)
+
+**Option B: Seed test accounts** (6 roles × 2 departments for full RBAC testing)
+
+Edit `.env.local`:
+
+```dotenv
+SEED_ORG_ID=test-org-123
+SEED_ORG_NAME=Test Organization
+SEED_PASSWORD=TestPass123!
+```
+
+Then run:
+
+```bash
+npm run seed:accounts
+```
+
+This creates:
+
+- super_admin@mail.com (Super Admin)
+- controller@mail.com (Document Controller)
+- mr@mail.com (Management Representative)
+- qa-user@mail.com (Department User — QA)
+- production-user@mail.com (Department User — Production)
+- readonly@mail.com (Read Only)
+
+### 10. Run the Application
+
+**Option A: Development with Emulator (Recommended)**
+
+Terminal 1:
+
+```bash
+firebase emulators:start
+```
+
+Terminal 2:
+
+```bash
+NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true npm run dev
+```
+
+Then open [http://localhost:3000](http://localhost:3000)
+
+**Option B: Against Real Firebase**
+
+```bash
 npm run dev
 ```
 
-### 7. Deploy rules/indexes/functions
+**Note**: This writes real data to your Firebase project. Use a dedicated test project.
+
+---
+
+## Deployment to Production
+
+### 1. Build for Production
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,storage:rules,functions
+npm run build
 ```
 
-## Post-Phase-4 changes (per direct request)
+### 2. Deploy Everything
 
-These came after Phase 4 was marked complete, in response to specific
-UX/structural feedback rather than the original spec's phase plan:
+```bash
+firebase deploy
+```
 
-- **Sidebar restructure**: "ISO Clauses" in the sidebar is now a
-  collapsible section (clicking it only toggles expand/collapse — it
-  does not navigate anywhere), with a clause tree underneath (parent
-  clauses, each expandable to their sub-clauses). **The standalone
-  `/clauses` list page was REMOVED** per explicit decision — individual
-  clause pages (`/clauses/[clauseId]`) are now reached only through the
-  sidebar tree or a direct link. If you want a `/clauses` overview page
-  back, that's a few lines plus a sidebar link, not a structural change.
-- **Document↔Clause linking, both directions**:
-  - From the document side: the create-document form now has a clause
-    picker (multi-select, grouped by parent clause, optional). Extracted
-    as `ClausePickerList` so the exact same picker UI is used both here
-    and in the existing per-document `ClauseTagger` (edit screen) — no
-    duplicated picker logic.
-  - From the clause side: the clause detail page now has "Link existing
-    document" (search/pick from documents you can already see, add this
-    clause to them) and "New document" (jumps to the create form with
-    this clause pre-selected via `?clauseId=` query param). Both
-    converge on the same `updateDocumentMetadata`/`createDocument`
-    Server Actions the document-side UI already used.
-- **Per-clause custom content/dashboards — explicitly DESCOPED.** The
-  original request asked for clause-specific data (e.g. external/internal
-  issues for Clause 4) with its own dashboard per clause. After
-  discussing the scope (each ISO 9001 clause would need a genuinely
-  different schema, and "universal across all deployments" is a much
-  stronger claim than ISO 9001 compliance itself supports), this was set
-  aside in favor of making document↔clause mapping itself solid. If
-  this comes back later, treat it as N separate small features, not one
-  generic system.
-- **Department management was a real gap, now fixed**: there was NO UI
-  anywhere to create, rename, or delete a department, or to set/change
-  a department's head, despite `createDepartment` existing as a server
-  action since Phase 1. Also added: `updateDepartment` and
-  `deleteDepartment` (neither existed before at all). `deleteDepartment`
-  refuses to delete if any document or user still references that
-  department, per explicit decision, to avoid orphaned `departmentId`
-  references.
-- **Organization profile editing was also a real gap, now fixed**: the
-  organization page only ever displayed the profile; `updateOrganizationProfile`
-  had existed as a server action since Phase 1 with no UI calling it.
-- **ISO clause seeding moved from the (now-removed) `/clauses` page to
-  the Organization page** — shown only when the org has zero clauses
-  yet.
+This deploys:
 
-## Known gaps / deliberate deferrals (read before Phase 3)
+- Firestore rules & indexes
+- Cloud Storage rules
+- Cloud Functions
+- (Next.js app: deploy separately to your hosting provider)
 
-**Carried over from Phase 1:**
-- Review-date transitions are manual, not scheduled.
-- Token revocation has a live-session blind spot.
-- Document Controller cannot approve their own submissions (now backed
-  by `tests/permissions.test.ts`, not just a comment).
-- `document_versions` IDs are deterministic, not auto-generated.
-- Custom claims carry `orgId`/`departmentId`, not just `role`.
-- The Firestore-write-then-claims-call in `changeUserRole` is not atomic.
+### 3. Set Up First Super Admin
 
-**New in Phase 4:**
-- **PDF export is not implemented** — per explicit priority decision,
-  Excel shipped first. The data-fetching/shaping pattern in
-  `lib/export/fetch-documents.ts` is reusable for a PDF version; only
-  `lib/export/documents-xlsx.ts`'s rendering layer would need a PDF
-  equivalent (e.g. via `@react-pdf/renderer` or `pdf-lib`).
-- **Global search is genuinely client-side** per explicit decision —
-  the FULL lightweight index (all visible documents + clauses + a
-  couple of org fields) downloads to the browser once per `/search`
-  visit, then every keystroke filters in memory. Read the large comment
-  block at the top of `app/actions/search.ts` for exactly what fields
-  are and aren't included (no document `description`, no file URLs, no
-  PII) and the scale ceiling this approach has (fine for hundreds of
-  documents, not designed for tens of thousands).
-- **`user_document_interactions` (favorites/recent) is a Phase 4
-  addition with no equivalent in the original spec's §3 data model** —
-  it's a new collection, new Firestore indexes, and new rules, not a
-  field added to an existing collection.
-- **Recent-view auto-tracking is throttled to one write per 5 minutes
-  per (user, document) pair** — a deliberate cost-control decision (see
-  the comment above `recordView` in `app/actions/favorites.ts`), not a
-  correctness mechanism. Don't rely on `lastViewedAt` for anything that
-  needs second-level precision.
-- **The dashboard's department breakdown and status distribution charts
-  use the SAME row-level RBAC scoping as every list view** — a
-  department_user's dashboard only reflects their department's
-  documents, a read_only's dashboard only reflects effective documents.
-  There is no separate "see everything" admin dashboard data path.
+After deploying:
 
-**New in Phase 3:**
-- **Vision & Mission's "reject" flow has a first-proposal edge case** —
-  if a draft is rejected and there is NO prior approved history (i.e.
-  this was the very first-ever proposal for that type), there's nothing
-  to revert to, so the rejected draft's content is marked "approved" by
-  fiat rather than truly discarded. Flagged explicitly in the comment
-  above `rejectVisionMissionEdit` in `app/actions/vision-mission.ts`.
-- **Numbering templates validate format only, never auto-generate** —
-  per explicit decision. A Document Controller can still type a
-  document number that doesn't match ANY configured template if no
-  template exists for that document type yet; enforcement is opt-in per
-  type, configured from Settings → Numbering.
-- **The numbering-template format hint on the document creation form is
-  intentionally NOT gated by Settings access** — Settings (viewing/
-  changing the template) is Super-Admin-only per §2, but the hint is
-  shown to anyone who can create documents (Document Controller
-  included), via a separate, narrower `getNumberingTemplatesForHint()`
-  action rather than reusing the Settings-gated `getOrgSettings()`. This
-  was an actual bug introduced and then caught mid-implementation —
-  gating the hint behind Settings access would have hidden it from
-  exactly the role that needs it most.
-- **Audit Trail pagination is cursor-based but the UI doesn't expose a
-  "load more" control yet** — `listAuditLogs` supports `startAfterId`,
-  but the page only renders the first page. Wire up pagination controls
-  before this audit log gets large enough that "most recent 50" stops
-  being sufficient for a real investigation.
+```bash
+cd functions && npm run build
+firebase deploy --only functions
+```
 
-**New in Phase 2:**
-- **Approval authority has no per-document assignment** — §2/§3 don't
-  model "this specific MR is the approver for this document," so
-  `submitForReview` notifies EVERY `management_representative` in the
-  org, and whoever acts first becomes `approverId`. If GIN/DBG needs
-  per-department assigned approvers, that's a schema addition (see the
-  comment block at the top of `app/actions/approvals.ts`), not a quick
-  tweak.
-- **Revision-number race window** — `reserveVersionUploadPath` computes
-  the next revision number from current state, but two concurrent
-  reservations for the same document (rare — would need two people
-  uploading to the same Draft at literally the same moment) can still
-  collide. `recordUploadedVersion` detects the mismatch and throws
-  rather than silently corrupting data, but doesn't auto-retry. See the
-  comment above `reserveVersionUploadPath`.
-- **`listPendingApprovals` and the dashboard's pending-approval count do
-  a Firestore read-then-filter in application code**, not a single
-  query — `document_approvals` has no `orgId` field of its own (§3's
-  schema), so cross-org filtering happens after fetching all pending
-  rows globally. Fine at expected QMS data volumes (tens to low hundreds
-  of pending approvals); revisit with a denormalized `orgId` field if
-  that assumption stops holding — see the comment in
-  `app/actions/approvals.ts`.
-- **Office file preview (DOCX/XLSX/PPTX) is explicitly NOT implemented**
-  per §6's own recommendation — those files upload and download
-  correctly, but only PDF gets an in-app preview commitment. The
-  version history table's "Download" button is the only way to view a
-  non-PDF revision in v1. Don't let this get demoed as "preview" to
-  GIN/DBG without the caveat — §6 flagged this explicitly so it
-  wouldn't be discovered during UAT.
-- **"Compare versions" is metadata-diff only** (revision date, changed
-  by, change description, side-by-side download) — there is no
-  content-diff button anywhere, and none should be added without the
-  explicit scoping/budget conversation §6 calls for.
-- **ISO clause seeding is one-shot and non-destructive-by-refusal** —
-  `seedIsoClauses` throws if the org already has any clauses, rather
-  than offering a "re-seed" option that could silently wipe
-  customizations. Deleting and re-seeding is a manual two-step process
-  by design.
+Then via Firebase Console or Admin SDK, create first user with Super Admin role before any UI is available (bootstrapping requirement).
 
-## Project structure
+---
 
-Matches §8 with one addition: `functions/` for Cloud Functions (not in
-the original spec's folder diagram, needed for the custom-claims sync
-trigger per §11 note #2).
+## Testing
+
+### Test Scripts
+
+```bash
+npm run test:unit              # RBAC + format validation (fast)
+npm run test:rules             # Firestore rules with emulator
+npm run seed:accounts          # Create test users
+```
+
+### Development Tools
+
+**Firebase Console**: [console.firebase.google.com](https://console.firebase.google.com)
+
+**Firebase Emulator UI**: [http://localhost:4000](http://localhost:4000) (when emulators running)
+
+---
+
+## Troubleshooting
+
+| Issue                                                          | Solution                                                                      |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `FIREBASE_PRIVATE_KEY` formatting errors                       | Ensure `\n` are literal, wrap entire value in quotes                          |
+| Tenant-isolation test fails                                    | Firestore rules have a security gap — fix before proceeding                   |
+| Custom claims not syncing                                      | Verify Cloud Functions deployed properly (check Firebase Console → Functions) |
+| Cloudinary upload fails                                        | Check `CLOUDINARY_API_KEY` and `CLOUDINARY_CLOUD_NAME` are set                |
+| "No emulator project. Did you run `firebase emulators:start`?" | Start emulator in another terminal before running tests                       |
