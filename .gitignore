@@ -1,0 +1,22 @@
+# Next.js
+/.next/
+/out/
+
+# Dependencies
+/node_modules/
+/functions/node_modules/
+/functions/lib/
+
+# Environment - NEVER commit real credentials
+.env*.local
+.env
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+*.tsbuildinfo
+
+# Build/test
+/coverage/

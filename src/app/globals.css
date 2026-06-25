@@ -1,0 +1,165 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.5rem;
+
+  /* Neutral UI base — slate-leaning, not pure gray, reads calmer in dense tables */
+  --background: #ffffff;
+  --foreground: #1c2128;
+  --card: #ffffff;
+  --card-foreground: #1c2128;
+  --popover: #ffffff;
+  --popover-foreground: #1c2128;
+  --primary: #1e3a5f;
+  --primary-foreground: #f7f9fb;
+  --secondary: #eef1f5;
+  --secondary-foreground: #1c2128;
+  --muted: #f3f5f7;
+  --muted-foreground: #5b6573;
+  --accent: #eef1f5;
+  --accent-foreground: #1c2128;
+  --destructive: #b3261e;
+  --destructive-foreground: #f7f9fb;
+  --border: #e2e6eb;
+  --input: #e2e6eb;
+  --ring: #1e3a5f;
+
+  /* Document lifecycle status — distinct hues, color-blind-safe pairings */
+  --status-draft: #5b6573;
+  --status-draft-bg: #f3f5f7;
+  --status-review: #9a6700;
+  --status-review-bg: #fef3e2;
+  --status-effective: #1a7f4b;
+  --status-effective-bg: #e8f6ee;
+  --status-obsolete: #6b5ca5;
+  --status-obsolete-bg: #f1edfa;
+  --status-archived: #5b6573;
+  --status-archived-bg: #eceef1;
+
+  /* Approval decisions — separate semantic channel from lifecycle status */
+  --decision-pending: #9a6700;
+  --decision-pending-bg: #fef3e2;
+  --decision-approved: #1a7f4b;
+  --decision-approved-bg: #e8f6ee;
+  --decision-rejected: #b3261e;
+  --decision-rejected-bg: #fdecea;
+  --decision-revision: #b5560c;
+  --decision-revision-bg: #fef0e6;
+
+  --chart-1: #1e3a5f;
+  --chart-2: #1a7f4b;
+  --chart-3: #9a6700;
+  --chart-4: #6b5ca5;
+  --chart-5: #b3261e;
+}
+
+.dark {
+  --background: #14181d;
+  --foreground: #e8eaed;
+  --card: #1a1f26;
+  --card-foreground: #e8eaed;
+  --popover: #1a1f26;
+  --popover-foreground: #e8eaed;
+  --primary: #6c93bf;
+  --primary-foreground: #0e1318;
+  --secondary: #232932;
+  --secondary-foreground: #e8eaed;
+  --muted: #232932;
+  --muted-foreground: #94a0ad;
+  --accent: #232932;
+  --accent-foreground: #e8eaed;
+  --destructive: #e5605a;
+  --destructive-foreground: #14181d;
+  --border: #2a3038;
+  --input: #2a3038;
+  --ring: #6c93bf;
+
+  --status-draft: #94a0ad;
+  --status-draft-bg: #232932;
+  --status-review: #d4a032;
+  --status-review-bg: #2e2716;
+  --status-effective: #4ec988;
+  --status-effective-bg: #16291f;
+  --status-obsolete: #a594d6;
+  --status-obsolete-bg: #251f33;
+  --status-archived: #94a0ad;
+  --status-archived-bg: #20242a;
+
+  --decision-pending: #d4a032;
+  --decision-pending-bg: #2e2716;
+  --decision-approved: #4ec988;
+  --decision-approved-bg: #16291f;
+  --decision-rejected: #e5605a;
+  --decision-rejected-bg: #2e1716;
+  --decision-revision: #e08a4e;
+  --decision-revision-bg: #2e2016;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-review: var(--status-review);
+  --color-status-review-bg: var(--status-review-bg);
+  --color-status-effective: var(--status-effective);
+  --color-status-effective-bg: var(--status-effective-bg);
+  --color-status-obsolete: var(--status-obsolete);
+  --color-status-obsolete-bg: var(--status-obsolete-bg);
+  --color-status-archived: var(--status-archived);
+  --color-status-archived-bg: var(--status-archived-bg);
+
+  --color-decision-pending: var(--decision-pending);
+  --color-decision-pending-bg: var(--decision-pending-bg);
+  --color-decision-approved: var(--decision-approved);
+  --color-decision-approved-bg: var(--decision-approved-bg);
+  --color-decision-rejected: var(--decision-rejected);
+  --color-decision-rejected-bg: var(--decision-rejected-bg);
+  --color-decision-revision: var(--decision-revision);
+  --color-decision-revision-bg: var(--decision-revision-bg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "tnum" 1;
+  }
+}

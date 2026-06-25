@@ -1,0 +1,276 @@
+rules_version = '2';
+
+/**
+ * =============================================================================
+ * MANUAL SYNC NOTICE
+ * =============================================================================
+ * This file mirrors the permission matrix in src/lib/rbac/permissions.ts by
+ * hand. Security rules cannot import TypeScript, so there is no automated
+ * check that the two stay consistent. Whenever PERMISSIONS in that file
+ * changes, come back here and update the matching rule. The risk register
+ * (spec §10, risk #1 and #4) treats inconsistency here as a top-priority
+ * failure mode — test it with the emulator (§11 handoff note #4), don't
+ * assume it by inspection.
+ *
+ * THREE NON-NEGOTIABLE RULES THIS FILE ENFORCES (spec §4):
+ * 1. document_versions, document_approvals, audit_logs: DENY ALL client
+ *    writes, full stop, even for super_admin. These collections are
+ *    written ONLY by server actions using the Admin SDK, which bypasses
+ *    these rules entirely. This file's deny-all rule on those three
+ *    collections is what protects against a future code regression that
+ *    accidentally exposes a client-side write path — it does nothing
+ *    against a careless Admin SDK call, which is a code-review problem
+ *    (risk #2), not a rules problem.
+ * 2. orgId is read from the AUTH TOKEN's custom claim, never from request
+ *    data the client supplies. isSameOrg() below is the single function
+ *    every collection's rules call — do not inline a different orgId
+ *    check anywhere in this file.
+ * 3. Role checks read request.auth.token.role (the custom claim set by
+ *    functions/src/index.ts syncUserRoleClaim / lib/firebase/admin.ts
+ *    setUserRoleClaim), never a Firestore get() on users/{uid}. A rules
+ *    get() lookup works but adds latency and is the textbook Firestore
+ *    rules anti-pattern this spec explicitly avoids (§4).
+ * =============================================================================
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------
+    // Shared helpers
+    // -------------------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function userOrgId() {
+      return request.auth.token.orgId;
+    }
+
+    // Tenant isolation, single source of truth for every collection below.
+    // Per spec §4: "orgId must be derived from the authenticated user's
+    // custom claims ... never trusted from client-supplied input."
+    function isSameOrg(resourceOrgId) {
+      return isSignedIn() && userOrgId() == resourceOrgId;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && role() == 'super_admin';
+    }
+
+    function isDocController() {
+      return isSignedIn() && role() == 'document_controller';
+    }
+
+    function isMgmtRep() {
+      return isSignedIn() && role() == 'management_representative';
+    }
+
+    function isDeptUser() {
+      return isSignedIn() && role() == 'department_user';
+    }
+
+    function isReadOnly() {
+      return isSignedIn() && role() == 'read_only';
+    }
+
+    // -------------------------------------------------------------------
+    // organizations/{orgId}
+    // §2: Org Profile — Super Admin CRUD, everyone else read.
+    // -------------------------------------------------------------------
+    match /organizations/{orgId} {
+      allow read: if isSameOrg(orgId);
+      allow write: if isSameOrg(orgId) && isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------
+    // users/{uid}
+    // §2: Users & Roles — Super Admin only for write. Every signed-in
+    // user in the org can read (needed for displaying names/avatars on
+    // documents, approvals, audit logs).
+    //
+    // tokensValidAfter is written by server actions / Cloud Functions
+    // only (see lib/firebase/admin.ts setUserRoleClaim) — client writes
+    // to this specific field are blocked even for super_admin, since a
+    // client write here would defeat the revocation mechanism it backs.
+    // -------------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isSameOrg(resource.data.orgId);
+      allow create: if isSameOrg(request.resource.data.orgId) && isSuperAdmin();
+      allow update: if isSameOrg(resource.data.orgId)
+                    && isSuperAdmin()
+                    && !('tokensValidAfter' in request.resource.data.diff(resource.data).affectedKeys());
+      allow delete: if isSameOrg(resource.data.orgId) && isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------
+    // departments/{id}
+    // Not explicitly in §2's matrix; treated as part of Org Profile scope
+    // (Super Admin CRUD, everyone reads) since departments gate document
+    // visibility for department_user.
+    // -------------------------------------------------------------------
+    match /departments/{id} {
+      allow read: if isSameOrg(resource.data.orgId);
+      allow create, update, delete: if isSameOrg(request.resource.data.orgId) && isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------
+    // documents/{id}
+    // §2 Documents row:
+    //   super_admin, document_controller: CRUD + Archive
+    //   management_representative: read, request changes (modeled via
+    //     document_reviews, not a write here)
+    //   department_user: read, SCOPED to their own department
+    //   read_only: read, SCOPED to status == 'effective' only
+    // -------------------------------------------------------------------
+    match /documents/{id} {
+      allow read: if isSameOrg(resource.data.orgId) && (
+        isSuperAdmin() || isDocController() || isMgmtRep() ||
+        (isDeptUser() && resource.data.departmentId == request.auth.token.departmentId) ||
+        (isReadOnly() && resource.data.status == 'effective')
+      );
+
+      allow create: if isSameOrg(request.resource.data.orgId)
+                     && (isSuperAdmin() || isDocController());
+
+      allow update, delete: if isSameOrg(resource.data.orgId)
+                             && (isSuperAdmin() || isDocController());
+    }
+
+    // -------------------------------------------------------------------
+    // document_versions/{id} — APPEND-ONLY, IMMUTABLE.
+    // Deny ALL client writes. Server actions write via Admin SDK, which
+    // bypasses this rule entirely — that's expected and documented at
+    // the top of this file. This rule's only job is to stop a client-side
+    // regression, not to be the sole enforcement mechanism.
+    // -------------------------------------------------------------------
+    match /document_versions/{id} {
+      allow read: if isSameOrg(get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.orgId);
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------
+    // document_approvals/{id} — APPEND-ONLY.
+    // §2 Approvals row: super_admin full; document_controller submits
+    // (modeled in code, not as a Firestore write permission since
+    // submissions also go through server actions); management_rep
+    // approves/rejects/requests revision — again, via server action only.
+    // Deny ALL client writes for the same reason as document_versions.
+    // -------------------------------------------------------------------
+    match /document_approvals/{id} {
+      allow read: if isSameOrg(get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.orgId)
+                  && (isSuperAdmin() || isDocController() || isMgmtRep());
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------
+    // document_reviews/{id} — periodic review cycle, distinct from
+    // approval workflow. Not append-only-enforced at the rules layer in
+    // the same way (no audit-trail-equivalent requirement was specified
+    // for this collection), but still server-action-only by convention —
+    // deny client writes for consistency with the rest of the workflow
+    // collections. Revisit if a legitimate need for direct client writes
+    // emerges.
+    // -------------------------------------------------------------------
+    match /document_reviews/{id} {
+      allow read: if isSameOrg(get(/databases/$(database)/documents/documents/$(resource.data.documentId)).data.orgId);
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------
+    // iso_clauses/{id}
+    // §2: super_admin + document_controller CRUD, everyone else reads.
+    // Per-org seeded copy (see spec §3 "ISO clauses: template vs per-org
+    // copy" — recommendation was seed-per-org, so orgId scoping applies
+    // here same as everywhere else).
+    // -------------------------------------------------------------------
+    match /iso_clauses/{id} {
+      allow read: if isSameOrg(resource.data.orgId);
+      allow create, update, delete: if isSameOrg(request.resource.data.orgId)
+                                     && (isSuperAdmin() || isDocController());
+    }
+
+    // -------------------------------------------------------------------
+    // vision_mission/{id} and its history subcollection
+    // §2: super_admin CRUD/approve; document_controller proposes edits;
+    // management_rep approves; everyone else reads.
+    // history subcollection is APPEND-ONLY, deny all client writes.
+    // -------------------------------------------------------------------
+    match /vision_mission/{id} {
+      allow read: if isSameOrg(resource.data.orgId);
+      allow create, update, delete: if isSameOrg(request.resource.data.orgId) && isSuperAdmin();
+
+      match /history/{historyId} {
+        allow read: if isSameOrg(get(/databases/$(database)/documents/vision_mission/$(id)).data.orgId);
+        allow write: if false;
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // notifications/{id}
+    // §2: "Full (own)" for every role — scoped strictly to the
+    // notification's own userId, never org-wide.
+    // -------------------------------------------------------------------
+    match /notifications/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // -------------------------------------------------------------------
+    // audit_logs/{id} — APPEND-ONLY, IMMUTABLE.
+    // §2: Read-only for super_admin, document_controller,
+    // management_representative. NO role has write access — every row is
+    // system-generated. Deny ALL client writes, no exceptions, not even
+    // super_admin (§4 Rule 2 says this explicitly).
+    // -------------------------------------------------------------------
+    match /audit_logs/{id} {
+      allow read: if isSameOrg(resource.data.orgId)
+                  && (isSuperAdmin() || isDocController() || isMgmtRep());
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------------
+    // settings/{orgId}
+    // §2: Super Admin full access only (numbering, backup, access control).
+    // -------------------------------------------------------------------
+    match /settings/{orgId} {
+      allow read, write: if isSameOrg(orgId) && isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------
+    // user_document_interactions/{uid}_{documentId} — Phase 4 addition
+    // (favorites/recent documents, not in the original spec's §3 model).
+    // Not written from the client at all in this app's UI — every write
+    // goes through toggleFavorite()/recordView() Server Actions via the
+    // Admin SDK — but this rule exists as the same defense-in-depth
+    // pattern used everywhere else: scoped strictly to the owning user
+    // (uid === auth.uid), same posture as notifications' "Full (own)".
+    // -------------------------------------------------------------------
+    match /user_document_interactions/{id} {
+      // NOTE on `list`: Firestore security rules cannot filter individual
+      // documents within a list/query result — `list` is an all-or-nothing
+      // gate on the REQUEST, not a per-row filter. True row-level
+      // restriction on a query requires the QUERY ITSELF to include a
+      // `where uid == request.auth.uid` clause (which every Server Action
+      // in this codebase already does — see app/actions/favorites.ts).
+      // This rule is a weaker backstop than the per-row `get`/`update`/
+      // `delete` rules below; it does not, by itself, stop a
+      // maliciously-constructed unfiltered client query from receiving
+      // unscoped Firestore-level results if anyone ever calls this
+      // collection directly from client code (which the app's own UI
+      // does not do today — every read goes through a Server Action via
+      // the Admin SDK, which bypasses rules entirely). Flagged rather
+      // than hidden: if this collection is ever queried directly from a
+      // client component, that query MUST include the uid filter itself.
+      allow get: if isSignedIn() && (!exists(/databases/$(database)/documents/user_document_interactions/$(id)) || resource.data.uid == request.auth.uid);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}
