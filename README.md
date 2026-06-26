@@ -425,6 +425,3 @@ useful first stops are:
   `lib/cloudinary/server.ts`, and `app/actions/*.ts` — most non-obvious
   decisions are explained inline, right where the relevant code is,
   rather than only in this file
-- [Known Gaps and Deliberate Deferrals](#known-gaps-and-deliberate-deferrals)
-  below before assuming something is a bug rather than a documented
-  trade-off
