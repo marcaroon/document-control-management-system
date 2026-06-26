@@ -65,6 +65,11 @@ export interface QmsDocument {
   reviewDate: ServerTimestamp;
   keywords: string[];
   isArchived: boolean;
+  /** Denormalized from the most recent document_approvals decision —
+   *  set on reject/revision_requested, cleared on re-submit or approve. */
+  lastApprovalDecision?: "rejected" | "revision_requested" | null;
+  lastApprovalNotes?: string | null;
+  lastApprovalDecidedBy?: string | null;
   createdBy: string;
   updatedBy: string;
   createdAt: ServerTimestamp;

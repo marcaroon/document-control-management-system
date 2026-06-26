@@ -18,6 +18,7 @@ import { ClauseTagger } from "@/components/documents/clause-tagger";
 import { AuditHistoryList } from "@/components/audit/audit-history-list";
 import { FavoriteToggle } from "@/components/documents/favorite-toggle";
 import { RecordViewOnMount } from "@/components/documents/record-view-on-mount";
+import { DecisionBanner } from "@/components/documents/decision-banner";
 
 export default async function DocumentDetailPage({
   params,
@@ -65,6 +66,16 @@ export default async function DocumentDetailPage({
     pendingApprovalId = approvalSnap.empty ? null : approvalSnap.docs[0].id;
   }
 
+  // Resolve the reviewer's display name for the decision banner
+  let reviewerName: string | null = null;
+  if (data.lastApprovalDecidedBy) {
+    const reviewerSnap = await adminDb.collection("users").doc(data.lastApprovalDecidedBy as string).get();
+    if (reviewerSnap.exists) {
+      const reviewerData = reviewerSnap.data()!;
+      reviewerName = reviewerData.name || reviewerData.email || null;
+    }
+  }
+
   const canUpload =
     hasPermission(session.role, "revisions", "create") &&
     (status === "draft" || status === "under_review");
@@ -110,6 +121,14 @@ export default async function DocumentDetailPage({
           <DocumentStatusBadge status={status} />
         </div>
       </div>
+
+      {data.lastApprovalDecision && (
+        <DecisionBanner
+          decision={data.lastApprovalDecision as "rejected" | "revision_requested"}
+          notes={(data.lastApprovalNotes as string) ?? null}
+          reviewerName={reviewerName}
+        />
+      )}
 
       <WorkflowActions
         documentId={id}

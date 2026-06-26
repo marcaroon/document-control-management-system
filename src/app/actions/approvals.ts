@@ -101,6 +101,10 @@ export async function submitForReview(input: z.infer<typeof submitForReviewSchem
         status: nextStatus,
         updatedBy: session.uid,
         updatedAt: FieldValue.serverTimestamp(),
+        // Clear any previous reject/revision banner when re-submitting
+        lastApprovalDecision: null,
+        lastApprovalNotes: null,
+        lastApprovalDecidedBy: null,
       });
 
       batch.set(approvalRef, {
@@ -221,6 +225,16 @@ async function decideApproval(
       // requests return to Draft and effectiveDate is left untouched.
       if (decision === "approved") {
         docUpdate.effectiveDate = FieldValue.serverTimestamp();
+        // Clear any previous reject/revision banner
+        docUpdate.lastApprovalDecision = null;
+        docUpdate.lastApprovalNotes = null;
+        docUpdate.lastApprovalDecidedBy = null;
+      } else {
+        // Persist the decision context so the document detail page
+        // can show a contextual banner explaining WHY it returned to Draft.
+        docUpdate.lastApprovalDecision = decision;
+        docUpdate.lastApprovalNotes = parsed.notes ?? "";
+        docUpdate.lastApprovalDecidedBy = session.uid;
       }
       batch.update(docRef, docUpdate);
 
