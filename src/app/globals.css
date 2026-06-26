@@ -163,3 +163,46 @@
     font-feature-settings: "tnum" 1;
   }
 }
+
+/* ── Spotlight Search Modal Animations ── */
+@keyframes spotlight-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes spotlight-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes spotlight-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes spotlight-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+[data-spotlight-overlay][data-state="open"] {
+  animation: spotlight-overlay-in 150ms ease-out;
+}
+[data-spotlight-overlay][data-state="closed"] {
+  animation: spotlight-overlay-out 100ms ease-in;
+}
+[data-spotlight-panel][data-state="open"] {
+  animation: spotlight-panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-spotlight-panel][data-state="closed"] {
+  animation: spotlight-panel-out 120ms ease-in;
+}

@@ -3,8 +3,8 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 
 export const metadata: Metadata = {
-  title: "QMS Document Control",
-  description: "Quality management system document control for GIN/DBG",
+  title: "Document Control System",
+  description: "Total Quality - Document Control System",
 };
 
 export default function RootLayout({

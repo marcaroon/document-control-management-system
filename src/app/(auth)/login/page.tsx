@@ -7,7 +7,13 @@ import { auth } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 export default function LoginPage() {
   return (
@@ -34,7 +40,11 @@ function LoginForm() {
     setSubmitting(true);
 
     try {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       const idToken = await credential.user.getIdToken();
 
       const res = await fetch("/api/auth/session", {
@@ -61,8 +71,12 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-muted px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">QMS Document Control</CardTitle>
-          <CardDescription>Sign in with your organization account.</CardDescription>
+          <CardTitle className="text-xl">
+            Document Control System
+          </CardTitle>
+          <CardDescription>
+            Sign in with your organization account.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {reason === "role_changed" && (

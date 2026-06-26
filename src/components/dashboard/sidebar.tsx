@@ -20,6 +20,7 @@ import { hasPermission } from "@/lib/rbac/permissions";
 import type { Role } from "@/lib/types/core";
 import { auth } from "@/lib/firebase/client";
 import { signOut } from "firebase/auth";
+import { SpotlightSearch } from "@/components/search/spotlight-search";
 
 interface NavItem {
   href: string;
@@ -29,8 +30,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, visible: () => true },
-  { href: "/search", label: "Search", icon: Search, visible: () => true },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    visible: () => true,
+  },
   {
     href: "/documents",
     label: "Documents",
@@ -89,14 +94,33 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // ── Spotlight search state ──
+  const [searchOpen, setSearchOpen] = React.useState(false);
+
+  // Global Ctrl+K / ⌘K shortcut
+  React.useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    }
+    document.addEventListener("keydown", handleGlobalKey);
+    return () => document.removeEventListener("keydown", handleGlobalKey);
+  }, []);
+
   const canReadClauses = hasPermission(role, "iso_clauses", "read");
 
   const parentClauses = React.useMemo(
     () =>
       clauses
         .filter((c) => !c.parentClauseId)
-        .sort((a, b) => a.clauseNumber.localeCompare(b.clauseNumber, undefined, { numeric: true })),
-    [clauses]
+        .sort((a, b) =>
+          a.clauseNumber.localeCompare(b.clauseNumber, undefined, {
+            numeric: true,
+          }),
+        ),
+    [clauses],
   );
   const childrenByParent = React.useMemo(() => {
     const map = new Map<string, ClauseRow[]>();
@@ -108,7 +132,11 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
       }
     }
     for (const list of map.values()) {
-      list.sort((a, b) => a.clauseNumber.localeCompare(b.clauseNumber, undefined, { numeric: true }));
+      list.sort((a, b) =>
+        a.clauseNumber.localeCompare(b.clauseNumber, undefined, {
+          numeric: true,
+        }),
+      );
     }
     return map;
   }, [clauses]);
@@ -131,12 +159,12 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
   // set-state-in-effect lint rule flags); instead, the values actually
   // rendered are computed during render by combining the override with
   // whatever the current route implies.
-  const [clausesExpandedOverride, setClausesExpandedOverride] = React.useState<boolean | null>(
-    null
-  );
-  const [expandedParentOverride, setExpandedParentOverride] = React.useState<string | null | "unset">(
-    "unset"
-  );
+  const [clausesExpandedOverride, setClausesExpandedOverride] = React.useState<
+    boolean | null
+  >(null);
+  const [expandedParentOverride, setExpandedParentOverride] = React.useState<
+    string | null | "unset"
+  >("unset");
 
   // Reset the parent-expand override when navigation moves to a
   // DIFFERENT parent clause section — otherwise collapsing one clause's
@@ -157,7 +185,9 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
   const isOnClausesRoute = pathname.startsWith("/clauses");
   const clausesExpanded = clausesExpandedOverride ?? isOnClausesRoute;
   const expandedParentId =
-    expandedParentOverride === "unset" ? activeParentId : expandedParentOverride;
+    expandedParentOverride === "unset"
+      ? activeParentId
+      : expandedParentOverride;
 
   async function handleLogout() {
     await signOut(auth);
@@ -166,7 +196,8 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
   }
 
   function renderNavItem(item: NavItem) {
-    const active = pathname === item.href || pathname.startsWith(item.href + "/");
+    const active =
+      pathname === item.href || pathname.startsWith(item.href + "/");
     const Icon = item.icon;
     return (
       <Link
@@ -176,7 +207,7 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
           "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
           active
             ? "bg-primary text-primary-foreground"
-            : "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+            : "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
         )}
       >
         <Icon className="size-4" />
@@ -188,9 +219,27 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
   return (
     <aside className="sticky top-0 flex h-screen w-64 flex-col border-r bg-card">
       <div className="border-b px-4 py-4">
-        <p className="text-sm font-semibold leading-tight">QMS Document Control</p>
+        <p className="text-sm font-semibold leading-tight">
+          Document Control System
+        </p>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        {/* Spotlight search trigger */}
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className={cn(
+            "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
+          )}
+        >
+          <Search className="size-4" />
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Ctrl K
+          </kbd>
+        </button>
+
         {NAV_ITEMS.filter((item) => item.visible(role)).map(renderNavItem)}
 
         {canReadClauses && (
@@ -200,20 +249,25 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
               onClick={() => setClausesExpandedOverride(!clausesExpanded)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+                "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
               )}
             >
               <BookOpen className="size-4" />
               <span className="flex-1 text-left">ISO Clauses</span>
               <ChevronRight
-                className={cn("size-3.5 transition-transform", clausesExpanded && "rotate-90")}
+                className={cn(
+                  "size-3.5 transition-transform",
+                  clausesExpanded && "rotate-90",
+                )}
               />
             </button>
 
             {clausesExpanded && (
               <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l pl-2">
                 {parentClauses.length === 0 ? (
-                  <p className="px-3 py-1.5 text-xs text-muted-foreground">No clauses yet.</p>
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground">
+                    No clauses yet.
+                  </p>
                 ) : (
                   parentClauses.map((parent) => {
                     const children = childrenByParent.get(parent.id) ?? [];
@@ -229,7 +283,7 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
                               "flex-1 truncate rounded-md px-3 py-1.5 text-sm transition-colors",
                               isParentActive
                                 ? "bg-primary text-primary-foreground"
-                                : "text-foreground/80 hover:bg-accent hover:text-accent-foreground"
+                                : "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
                             )}
                           >
                             {parent.clauseNumber}. {parent.title}
@@ -239,16 +293,20 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
                               type="button"
                               onClick={() =>
                                 setExpandedParentOverride(
-                                  expandedParentId === parent.id ? null : parent.id
+                                  expandedParentId === parent.id
+                                    ? null
+                                    : parent.id,
                                 )
                               }
                               className="rounded-md p-1.5 text-muted-foreground hover:bg-accent"
-                              aria-label={isParentExpanded ? "Collapse" : "Expand"}
+                              aria-label={
+                                isParentExpanded ? "Collapse" : "Expand"
+                              }
                             >
                               <ChevronRight
                                 className={cn(
                                   "size-3 transition-transform",
-                                  isParentExpanded && "rotate-90"
+                                  isParentExpanded && "rotate-90",
                                 )}
                               />
                             </button>
@@ -258,7 +316,8 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
                         {isParentExpanded && children.length > 0 && (
                           <div className="ml-3 flex flex-col gap-0.5 border-l pl-2">
                             {children.map((child) => {
-                              const isChildActive = pathname === `/clauses/${child.id}`;
+                              const isChildActive =
+                                pathname === `/clauses/${child.id}`;
                               return (
                                 <Link
                                   key={child.id}
@@ -267,7 +326,7 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
                                     "truncate rounded-md px-3 py-1.5 text-xs transition-colors",
                                     isChildActive
                                       ? "bg-primary text-primary-foreground"
-                                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                                   )}
                                 >
                                   {child.clauseNumber} {child.title}
@@ -285,7 +344,9 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
           </div>
         )}
 
-        {NAV_ITEMS_AFTER_CLAUSES.filter((item) => item.visible(role)).map(renderNavItem)}
+        {NAV_ITEMS_AFTER_CLAUSES.filter((item) => item.visible(role)).map(
+          renderNavItem,
+        )}
       </nav>
       <div className="border-t p-3">
         <button
@@ -296,6 +357,9 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
           Sign out
         </button>
       </div>
+
+      {/* Spotlight search modal */}
+      <SpotlightSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </aside>
   );
 }
