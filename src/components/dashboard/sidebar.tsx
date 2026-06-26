@@ -253,7 +253,7 @@ export function DashboardSidebar({ role, clauses }: SidebarProps) {
               )}
             >
               <BookOpen className="size-4" />
-              <span className="flex-1 text-left">ISO Clauses</span>
+              <span className="flex-1 text-left">ISO 9001:2015</span>
               <ChevronRight
                 className={cn(
                   "size-3.5 transition-transform",
