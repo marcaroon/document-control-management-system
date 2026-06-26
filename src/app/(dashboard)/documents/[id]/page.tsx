@@ -6,6 +6,7 @@ import { canReadDocument, hasPermission } from "@/lib/rbac/permissions";
 import { listDocumentVersions } from "@/app/actions/versions";
 import { listIsoClauses } from "@/app/actions/clauses";
 import { listAuditLogsForTarget } from "@/app/actions/audit";
+import { listDepartments } from "@/app/actions/organization";
 import { getFavoriteStatus } from "@/app/actions/favorites";
 import { DOCUMENT_TYPE_LABELS, type DocumentStatus, type DocumentType } from "@/lib/types/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,6 +92,11 @@ export default async function DocumentDetailPage({
   const auditLogs = rawAuditLogs as unknown as import("@/components/audit/audit-history-list").AuditLogEntry[];
   const isFavorite = await getFavoriteStatus(id);
 
+  const rawDepartments = await listDepartments();
+  const departments = rawDepartments as unknown as { id: string; name: string }[];
+  const deptMap = new Map(departments.map((d) => [d.id, d.name]));
+  const departmentName = deptMap.get(data.departmentId as string) ?? "—";
+
   return (
     <div className="flex flex-col gap-6">
       <RecordViewOnMount documentId={id} />
@@ -120,6 +126,10 @@ export default async function DocumentDetailPage({
           <div>
             <p className="text-muted-foreground">Type</p>
             <p>{DOCUMENT_TYPE_LABELS[data.type as DocumentType]}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Department</p>
+            <p>{departmentName}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Current revision</p>

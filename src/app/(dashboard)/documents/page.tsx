@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServerSession } from "@/lib/auth/session";
 import { listVisibleDocuments } from "@/app/actions/documents";
+import { listDepartments } from "@/app/actions/organization";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { DOCUMENT_TYPE_LABELS, type DocumentStatus, type DocumentType } from "@/lib/types/core";
 import { Button } from "@/components/ui/button";
@@ -20,13 +21,18 @@ interface DocRow {
   documentNumber: string;
   title: string;
   type: DocumentType;
+  departmentId: string;
   status: DocumentStatus;
   currentRevisionNumber: number;
 }
 
 export default async function DocumentsPage() {
   const session = await getServerSession();
-  const documents = (await listVisibleDocuments()) as unknown as DocRow[];
+  const [documents, departments] = await Promise.all([
+    listVisibleDocuments() as unknown as Promise<DocRow[]>,
+    listDepartments() as unknown as Promise<{ id: string; name: string }[]>,
+  ]);
+  const deptMap = new Map(departments.map((d) => [d.id, d.name]));
   const canCreate = session && hasPermission(session.role, "documents", "create");
 
   return (
@@ -63,6 +69,7 @@ export default async function DocumentsPage() {
               <TableHead>Document #</TableHead>
               <TableHead>Title</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Department</TableHead>
               <TableHead>Rev.</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -70,7 +77,7 @@ export default async function DocumentsPage() {
           <TableBody>
             {documents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No documents yet. {canCreate ? "Create the first one to get started." : ""}
                 </TableCell>
               </TableRow>
@@ -85,6 +92,9 @@ export default async function DocumentsPage() {
                 <TableCell>{doc.title}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {DOCUMENT_TYPE_LABELS[doc.type]}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {deptMap.get(doc.departmentId) ?? "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {doc.currentRevisionNumber}
